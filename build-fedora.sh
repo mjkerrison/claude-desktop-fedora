@@ -238,7 +238,17 @@ npx asar extract app.asar app.asar.contents || { echo "asar extract failed"; exi
 
 echo "Attempting to set frame:true and remove titleBarStyle/titleBarOverlay in index.js..."
 
-sed -i 's/height:e\.height,titleBarStyle:"default",titleBarOverlay:[^,]\+,/height:e.height,frame:true,/g' app.asar.contents/.vite/build/index.js || echo "Warning: sed command failed to modify index.js"
+# Fix main window to use native frame decorations instead of custom titlebar
+# The main window has: titleBarStyle:"hidden",titleBarOverlay:Xi,trafficLightPosition:...
+# We replace titleBarStyle:"hidden",titleBarOverlay:Xi, with frame:true, to get native window controls
+sed -i 's/titleBarStyle:"hidden",titleBarOverlay:Xi,trafficLightPosition:[^,]*,/frame:true,/g' app.asar.contents/.vite/build/index.js
+
+# Verify the fix was applied
+if grep -q 'titleBarOverlay:Xi' app.asar.contents/.vite/build/index.js; then
+    echo "Warning: titleBarOverlay still present - sed pattern may need updating"
+else
+    echo "✓ Window frame fix applied successfully"
+fi
 
 # Replace native module with stub implementation
 echo "Creating stub native module..."
