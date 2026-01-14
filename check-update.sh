@@ -12,6 +12,31 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Apply the custom launcher script that uses standalone Electron
+apply_launcher_fix() {
+    echo "Applying custom launcher script..."
+    sudo tee /usr/bin/claude-desktop > /dev/null << 'LAUNCHER_EOF'
+#!/usr/bin/bash
+LOG_FILE="$HOME/claude-desktop-launcher.log"
+
+# Set environment to avoid GTK conflicts
+export GDK_BACKEND=x11
+export GTK_USE_PORTAL=0
+export ELECTRON_DISABLE_SECURITY_WARNINGS=true
+
+# Use the standalone electron installation
+/opt/electron/electron /usr/lib64/claude-desktop/app.asar --ozone-platform-hint=auto --enable-logging=file --log-file=$LOG_FILE --log-level=INFO --disable-gpu-sandbox --no-sandbox "$@"
+LAUNCHER_EOF
+    sudo chmod +x /usr/bin/claude-desktop
+    echo -e "${GREEN}✓ Launcher script updated${NC}"
+}
+
+# Handle --fix-launcher flag
+if [[ "$1" == "--fix-launcher" ]]; then
+    apply_launcher_fix
+    exit 0
+fi
+
 echo "Checking for Claude Desktop updates..."
 echo
 
@@ -82,8 +107,21 @@ elif version_gt "$LATEST" "$INSTALLED"; then
         echo "Starting build..."
         sudo ./build-fedora.sh
         echo
-        echo "Build complete. Install with:"
-        echo "  sudo dnf install build/electron-app/\$(uname -m)/claude-desktop-*.rpm"
+        read -p "Build complete. Install the RPM now? [y/N] " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            sudo dnf install build/electron-app/$(uname -m)/claude-desktop-*.rpm
+            echo
+            read -p "Apply custom launcher fix (required for standalone Electron)? [Y/n] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                apply_launcher_fix
+            fi
+        else
+            echo "Install manually with:"
+            echo "  sudo dnf install build/electron-app/\$(uname -m)/claude-desktop-*.rpm"
+            echo "Then run: $0 --fix-launcher"
+        fi
     fi
 else
     echo -e "${GREEN}You're running a newer version than upstream (${INSTALLED} > ${LATEST})${NC}"
